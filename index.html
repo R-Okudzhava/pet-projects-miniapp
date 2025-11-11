@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Пет-Проекты</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="main-screen">
+    <h1>Пет-Проекты</h1>
+    <button id="find-projects-btn">Я ищу проект для участия</button>
+    <button id="my-project-btn">У меня есть проект</button>
+    <button id="admin-panel-btn" style="display:none;">Админ-панель</button>
+  </div>
+
+  <div id="catalog-screen" style="display:none;">
+    <h2>Каталог проектов</h2>
+    <div id="project-list"></div>
+    <button id="catalog-back-btn">Назад</button>
+  </div>
+
+  <div id="project-detail" style="display:none;"></div>
+
+  <div id="apply-screen" style="display:none;">
+    <h2>Заявка на участие</h2>
+    <form id="apply-form" autocomplete="off">
+      <div class="input-group">
+        <label for="apply-name">Имя:</label>
+        <input type="text" id="apply-name" required>
+      </div>
+      <div class="input-group">
+        <label for="apply-username">Username:</label>
+        <input type="text" id="apply-username" required readonly>
+      </div>
+      <button type="submit">Отправить заявку</button>
+    </form>
+    <button id="apply-back-btn">Назад</button>
+  </div>
+
+  <div id="create-project-screen" style="display:none;">
+    <h2>Создать проект</h2>
+    <form id="create-project-form" autocomplete="off">
+      <div class="input-group">
+        <label>Название проекта:</label>
+        <input type="text" id="project-title" required>
+      </div>
+      <div class="input-group">
+        <label>Проблема:</label>
+        <input type="text" id="project-problem" required>
+      </div>
+      <div class="input-group">
+        <label>Описание:</label>
+        <input type="text" id="project-description" required>
+      </div>
+      <div class="input-group">
+        <label>Сфера:</label>
+        <input type="text" id="project-sphere" required>
+      </div>
+      <div class="input-group">
+        <label>Искомые роли (через запятую):</label>
+        <input type="text" id="project-roles" required>
+      </div>
+      <div class="input-group">
+        <label>О команде:</label>
+        <input type="text" id="project-team" required>
+      </div>
+      <button type="submit">Сохранить</button>
+    </form>
+    <button id="create-back-btn">Назад</button>
+  </div>
+
+  <div id="admin-panel-screen" style="display:none;">
+    <h2>Админ-панель</h2>
+    <div id="pending-projects-list"></div>
+    <button id="admin-back-btn">Назад</button>
+  </div>
+
+  <script src="https://unpkg.com/@twa-dev/sdk@latest/dist/index.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
