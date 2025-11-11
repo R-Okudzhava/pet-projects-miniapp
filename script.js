@@ -1,154 +1,252 @@
-// --- Глобальные переменные и константы ---
-let projects = JSON.parse(localStorage.getItem('projects')) || [];
-let applications = JSON.parse(localStorage.getItem('applications')) || [];
+// --- Настройки API ---
+const API_BASE_URL = "http://localhost:8000"; // ← замените на реальный адрес API вашего бэкенда
 
-function saveToLocalStorage() {
-  localStorage.setItem('projects', JSON.stringify(projects));
-  localStorage.setItem('applications', JSON.stringify(applications));
+// --- Работа с Telegram WebApp SDK ---
+let initData;
+let teleUser;
+if (window.Telegram && Telegram.WebApp) {
+  Telegram.WebApp.expand();
+  Telegram.WebApp.ready();
+  initData = Telegram.WebApp.initData || '';
+  try {
+    teleUser = (Telegram.WebApp.initDataUnsafe && Telegram.WebApp.initDataUnsafe.user) || null;
+  } catch (e) { teleUser = null; }
+}
+if (!initData || !teleUser) {
+  alert("Ошибка авторизации Telegram Mini App. Перезапустите через меню бота.");
 }
 
-// ------------ Управление экранами ---------------
-function showScreen(screenId) {
-  [
-    'main-screen','catalog-screen','project-detail','apply-screen',
-    'create-project-screen','admin-panel-screen'
-  ].forEach(id => {
-    document.getElementById(id).style.display = 'none';
+// --- DOM хранилище элементов ---
+const screens = {
+  main: document.getElementById('main-screen'),
+  detail: document.getElementById('project-detail-screen'),
+  my: document.getElementById('my-projects-screen'),
+  form: document.getElementById('project-form-screen')
+};
+function show(screen) {
+  Object.values(screens).forEach(el => el.style.display = 'none');
+  screens[screen].style.display = '';
+}
+
+const projectsContainer = document.getElementById('projects-container');
+const nextBtn = document.getElementById('next-btn');
+const prevBtn = document.getElementById('prev-btn');
+const createBtn = document.getElementById('create-project-btn');
+const myBtn = document.getElementById('my-projects-btn');
+const myList = document.getElementById('my-projects-list');
+const backBtn = document.getElementById('back-btn');
+
+let projects = [];
+let currentIdx = 0;
+
+// --- Загрузка проектов ---
+async function fetchProjects() {
+  projectsContainer.innerHTML = "Загрузка...";
+  const resp = await fetch(API_BASE_URL + "/api/projects?approved=true");
+  const data = await resp.json();
+  projects = data.projects || [];
+  currentIdx = 0;
+  renderCurrentProject();
+}
+function renderCurrentProject() {
+  projectsContainer.innerHTML = "";
+  if (projects.length === 0) {
+    projectsContainer.innerHTML = "<i>Пока нет проектов.</i>";
+    return;
+  }
+  const p = projects[currentIdx];
+  const card = document.createElement('div');
+  card.className = 'project-card';
+  card.innerHTML = `
+    <b>${p.title}</b><br>
+    <small>Сфера: ${p.sphere || '-'}</small><br>
+    <div>Проблема: <i>${p.problem || '-'}</i></div>
+    <button class="info-btn">Подробнее</button>
+  `;
+  card.querySelector('.info-btn').onclick = () => openProjectDetail(p);
+  projectsContainer.appendChild(card);
+}
+nextBtn.onclick = () => {
+  if (projects.length) {
+    currentIdx = (currentIdx + 1) % projects.length;
+    renderCurrentProject();
+  }
+};
+prevBtn.onclick = () => {
+  if (projects.length) {
+    currentIdx = (currentIdx - 1 + projects.length) % projects.length;
+    renderCurrentProject();
+  }
+};
+
+// --- Деталка ---
+function openProjectDetail(p) {
+  show('detail');
+  const el = document.getElementById('project-detail');
+  el.innerHTML = `
+    <h2>${p.title}</h2>
+    <div><b>Сфера:</b> ${p.sphere || '-'}</div>
+    <div><b>Проблема:</b> ${p.problem || '-'}</div>
+    <div><b>Описание:</b> <br>${(p.description||'').replace(/\n/g,'<br>')}</div>
+    <div><b>Кто нужен:</b> ${p.roles_needed || '-'}</div>
+    <div><b>О команде:</b> ${p.team_info || '-'}</div>
+    <div><b>Ссылка:</b> <a href="${p.link}" target="_blank">${p.link}</a></div>
+    <div><b>Владелец:</b> <a href="https://t.me/${p.owner_username}" target="_blank">@${p.owner_username}</a></div>
+    <br>
+    <button id="contact-btn-detail">Связаться</button>
+    ${p.owner_id === teleUser.id ? '<button id="edit-btn-detail">Редактировать</button><button id="delete-btn-detail">Удалить</button>' : ''}
+  `;
+  document.getElementById('back-to-list-btn').onclick = () => { show('main'); };
+  document.getElementById('contact-btn-detail').onclick = () => { window.open('https://t.me/'+p.owner_username, '_blank'); };
+  if (p.owner_id === teleUser.id) {
+    document.getElementById('edit-btn-detail').onclick = () => openEditProjectForm(p);
+    document.getElementById('delete-btn-detail').onclick = () => deleteProject(p.id);
+  }
+}
+
+// --- Мои проекты ---
+myBtn.onclick = async function() {
+  show('my');
+  myList.innerHTML = "Загрузка...";
+  const resp = await fetch(API_BASE_URL + "/api/projects/owner", {
+    headers: { 'X-Tg-InitData': initData }
   });
-  document.getElementById(screenId).style.display = 'block';
-  // Скрываем кнопку админ-панели, если решили её убрать тоже
-  // document.getElementById('admin-panel-btn').style.display = 'none';
-}
-
-document.getElementById('find-projects-btn').onclick = () => {
-  showScreen('catalog-screen');
-  renderProjectList();
-};
-document.getElementById('my-project-btn').onclick = () => {
-  // Убрали проверку: теперь любой может создать проект
-  showScreen('create-project-screen');
-};
-document.getElementById('catalog-back-btn').onclick = () => {
-  showScreen('main-screen');
-};
-// Убираем кнопку админ-панели из DOM или скрываем её
-// document.getElementById('admin-panel-btn').onclick = () => {
-//   showScreen('admin-panel-screen');
-//   renderAdminPanel();
-// };
-// document.getElementById('admin-back-btn').onclick = () => {
-//   showScreen('main-screen');
-// };
-document.getElementById('create-back-btn').onclick = () => {
-  showScreen('main-screen');
-};
-
-// ---------- Каталог проектов ----------
-function renderProjectList() {
-  const list = document.getElementById('project-list');
-  list.innerHTML = '';
-  projects.filter(p=>p.is_approved).forEach(project => {
+  const data = await resp.json();
+  myList.innerHTML = "";
+  if (!data.projects.length) { myList.innerHTML = "У вас нет проектов."; return; }
+  data.projects.forEach(p => {
     const card = document.createElement('div');
     card.className = 'project-card';
     card.innerHTML = `
-      <div class="project-title">${project.title}</div>
-      <div class="project-sphere"><b>Сфера:</b> ${project.sphere}</div>
-      <div class="project-roles"><b>Ищем:</b> ${project.roles_needed.join(', ')}</div>
-      <button class="details-btn" data-id="${project.id}">Подробнее</button>
+      <b>${p.title}</b> [${p.sphere}]<br>
+      <span>${p.problem}</span><br>
+      <button>Подробнее</button>
     `;
-    list.appendChild(card);
+    card.querySelector('button').onclick = () => openProjectDetail(p);
+    myList.appendChild(card);
   });
-  document.querySelectorAll('.details-btn').forEach(btn => {
-    btn.onclick = function() { showProjectDetail(this.dataset.id); };
-  });
-}
-
-// ---------- Деталка проекта ----------
-function showProjectDetail(id) {
-  const project = projects.find(p => p.id == id);
-  if (!project) return;
-  const detail = document.getElementById('project-detail');
-  detail.innerHTML = `
-    <h2>${project.title}</h2>
-    <div><b>Проблема:</b> ${project.problem}</div>
-    <div><b>Описание:</b> ${project.description}</div>
-    <div><b>Сфера:</b> ${project.sphere}</div>
-    <div><b>Ищем:</b> ${project.roles_needed.join(', ')}</div>
-    <div><b>Команда:</b> ${project.team_info}</div>
-    <div><b>Контакт:</b> <a href="https://t.me/${project.owner_username.replace('@','')}" target="_blank">${project.owner_username}</a></div>
-    <button id="apply-btn">Присоединиться</button>
-    <button id="detail-back-btn">Назад</button>
-  `;
-  showScreen('project-detail');
-  document.getElementById('detail-back-btn').onclick = () => {
-    showScreen('catalog-screen');
-  };
-  document.getElementById('apply-btn').onclick = () => {
-    openApplyScreen(project);
-  };
-}
-
-// ---------- Apply (Заявка) ----------
-function openApplyScreen(project) {
-  showScreen('apply-screen');
-  // Получаем имя пользователя через TWA SDK, если он есть
-  let username = '';
-  try {
-    username = window.Telegram?.WebApp?.initDataUnsafe?.user?.username || '';
-  } catch(e) {}
-  document.getElementById('apply-username').value = username;
-  document.getElementById('apply-name').value = '';
-  document.getElementById('apply-form').onsubmit = function(e) {
-    e.preventDefault();
-    // Сохраняем заявку
-    const application = {
-      project_id: project.id,
-      name: document.getElementById('apply-name').value,
-      username: document.getElementById('apply-username').value,
-      user_id: window.Telegram?.WebApp?.initDataUnsafe?.user?.id || null,
-      date: new Date().toISOString()
-    };
-    applications.push(application);
-    saveToLocalStorage();
-    alert('Заявка отправлена!');
-    showScreen('catalog-screen');
-  };
-  document.getElementById('apply-back-btn').onclick = function() {
-    showProjectDetail(project.id);
-  };
-}
-
-// ---------- Создать проект (теперь для всех) ----------
-document.getElementById('create-project-form').onsubmit = function(e) {
-  e.preventDefault();
-  const user = window.Telegram?.WebApp?.initDataUnsafe?.user;
-  if (!user) {
-    alert('Ошибка авторизации!');
-    return;
-  }
-  const newProject = {
-    id: 'id_' + Date.now(),
-    title: document.getElementById('project-title').value,
-    problem: document.getElementById('project-problem').value,
-    description: document.getElementById('project-description').value,
-    sphere: document.getElementById('project-sphere').value,
-    roles_needed: document.getElementById('project-roles').value.split(',').map(r=>r.trim()).filter(Boolean),
-    team_info: document.getElementById('project-team').value,
-    owner_username: '@'+(user.username||'user'),
-    owner_id: user.id,
-    is_approved: true // Проекты теперь публикуются сразу
-  };
-  projects.push(newProject);
-  saveToLocalStorage();
-  alert('Проект успешно добавлен!');
-  showScreen('main-screen');
-  document.getElementById('create-project-form').reset();
 };
+backBtn.onclick = () => show('main');
 
-// ---------- Админ-панель (теперь не нужна, можно удалить весь блок) ----------
-// renderAdminPanel и approveProject больше не используются
+// --- Форма создания/редактирования ---
+createBtn.onclick = () => openCreateProjectForm();
+function openCreateProjectForm() {
+  show('form');
+  document.getElementById('form-title').textContent = "Новый проект";
+  const form = document.getElementById('project-form');
+  form.reset();
+  form.onsubmit = async e => {
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(form).entries());
+    const resp = await fetch(API_BASE_URL + "/api/projects", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Tg-InitData": initData },
+      body: JSON.stringify(data)
+    });
+    const result = await resp.json();
+    if (result.success) {
+      showAlert("Проект отправлен на модерацию!");
+      await fetchProjects();
+      show('main');
+    } else {
+      showAlert("Ошибка сохранения проекта!");
+    }
+  };
+  document.getElementById('cancel-form-btn').onclick = () => show('main');
+}
+function openEditProjectForm(project) {
+  show('form');
+  document.getElementById('form-title').textContent = "Редактировать проект";
+  const form = document.getElementById('project-form');
+  form.title.value = project.title;
+  form.problem.value = project.problem;
+  form.description.value = project.description;
+  form.sphere.value = project.sphere;
+  form.roles_needed.value = project.roles_needed;
+  form.team_info.value = project.team_info;
+  form.link.value = project.link;
+  form.onsubmit = async e => {
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(form).entries());
+    const resp = await fetch(API_BASE_URL + "/api/projects/" + project.id, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "X-Tg-InitData": initData },
+      body: JSON.stringify(data)
+    });
+    const result = await resp.json();
+    if (result.success) {
+      showAlert("Изменения сохранены!");
+      await fetchProjects();
+      show('main');
+    } else {
+      showAlert("Ошибка обновления проекта!");
+    }
+  };
+  document.getElementById('cancel-form-btn').onclick = () => show('main');
+}
 
-// --------- Кнопка admin-panel в main-screen ---------
-window.addEventListener('DOMContentLoaded', () => {
-  showScreen('main-screen');
+// --- Удаление проекта с подтверждением ---
+function deleteProject(id) {
+  showAlert("Точно удалить проект?", [
+    { text: "Нет", handler: closeAlert },
+    { text: "Да, удалить", handler: async function() {
+      const resp = await fetch(API_BASE_URL + "/api/projects/" + id, {
+        method: "DELETE",
+        headers: { 'X-Tg-InitData': initData }
+      });
+      const result = await resp.json();
+      closeAlert();
+      if (result.success) {
+        showAlert("Удалено");
+        await fetchProjects();
+        show('main');
+      } else {
+        showAlert("Ошибка удаления!");
+      }
+    }, style: 'danger' }
+  ]);
+}
+
+// --- Mock Свайпы (упростим: обработчик touchstart/move/stop) ---
+let touchStartX = null;
+projectsContainer.addEventListener('touchstart', e => {
+  touchStartX = e.touches[0].clientX;
 });
+projectsContainer.addEventListener('touchend', e => {
+  if (touchStartX === null) return;
+  let dx = e.changedTouches[0].clientX - touchStartX;
+  if (Math.abs(dx) > 50) {
+    if (dx < 0) nextBtn.onclick();
+    else prevBtn.onclick();
+  }
+  touchStartX = null;
+});
+
+// --- Окно алерта ---
+function showAlert(text, buttons) {
+  const overlay = document.getElementById('alert-overlay');
+  const win = document.getElementById('alert-window');
+  overlay.style.display = '';
+  win.innerHTML = `<div style="margin-bottom:18px">${text}</div>`;
+  if (buttons && buttons.length) {
+    buttons.forEach(b => {
+      let btn = document.createElement('button');
+      btn.textContent = b.text;
+      btn.onclick = b.handler || closeAlert;
+      if (b.style === 'danger') btn.style.background = '#fcc';
+      win.appendChild(btn);
+    });
+  } else {
+    let btn = document.createElement('button');
+    btn.textContent = "OK";
+    btn.onclick = closeAlert;
+    win.appendChild(btn);
+  }
+}
+function closeAlert() {
+  const overlay = document.getElementById('alert-overlay');
+  overlay.style.display = 'none';
+}
+
+// --- Первичный запуск ---
+fetchProjects();
