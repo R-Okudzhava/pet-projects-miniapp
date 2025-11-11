@@ -1,16 +1,10 @@
 // --- Глобальные переменные и константы ---
 let projects = JSON.parse(localStorage.getItem('projects')) || [];
 let applications = JSON.parse(localStorage.getItem('applications')) || [];
-const ADMIN_USER_ID = 943463404; // !! Замените на реальный admin id !!
 
 function saveToLocalStorage() {
   localStorage.setItem('projects', JSON.stringify(projects));
   localStorage.setItem('applications', JSON.stringify(applications));
-}
-
-function isAdmin() {
-  const user = window.Telegram?.WebApp?.initDataUnsafe?.user;
-  return user && user.id === ADMIN_USER_ID;
 }
 
 // ------------ Управление экранами ---------------
@@ -22,8 +16,8 @@ function showScreen(screenId) {
     document.getElementById(id).style.display = 'none';
   });
   document.getElementById(screenId).style.display = 'block';
-  // Показать кнопку admin-panel только админу
-  document.getElementById('admin-panel-btn').style.display = isAdmin() ? 'inline-block' : 'none';
+  // Скрываем кнопку админ-панели, если решили её убрать тоже
+  // document.getElementById('admin-panel-btn').style.display = 'none';
 }
 
 document.getElementById('find-projects-btn').onclick = () => {
@@ -31,22 +25,20 @@ document.getElementById('find-projects-btn').onclick = () => {
   renderProjectList();
 };
 document.getElementById('my-project-btn').onclick = () => {
-  if (isAdmin()) {
-    showScreen('create-project-screen');
-  } else {
-    alert('Создание проекта доступно только администратору.');
-  }
+  // Убрали проверку: теперь любой может создать проект
+  showScreen('create-project-screen');
 };
 document.getElementById('catalog-back-btn').onclick = () => {
   showScreen('main-screen');
 };
-document.getElementById('admin-panel-btn').onclick = () => {
-  showScreen('admin-panel-screen');
-  renderAdminPanel();
-};
-document.getElementById('admin-back-btn').onclick = () => {
-  showScreen('main-screen');
-};
+// Убираем кнопку админ-панели из DOM или скрываем её
+// document.getElementById('admin-panel-btn').onclick = () => {
+//   showScreen('admin-panel-screen');
+//   renderAdminPanel();
+// };
+// document.getElementById('admin-back-btn').onclick = () => {
+//   showScreen('main-screen');
+// };
 document.getElementById('create-back-btn').onclick = () => {
   showScreen('main-screen');
 };
@@ -126,11 +118,11 @@ function openApplyScreen(project) {
   };
 }
 
-// ---------- Создать проект (только для админа) ----------
+// ---------- Создать проект (теперь для всех) ----------
 document.getElementById('create-project-form').onsubmit = function(e) {
   e.preventDefault();
   const user = window.Telegram?.WebApp?.initDataUnsafe?.user;
-  if (!isAdmin() || !user) {
+  if (!user) {
     alert('Ошибка авторизации!');
     return;
   }
@@ -142,51 +134,19 @@ document.getElementById('create-project-form').onsubmit = function(e) {
     sphere: document.getElementById('project-sphere').value,
     roles_needed: document.getElementById('project-roles').value.split(',').map(r=>r.trim()).filter(Boolean),
     team_info: document.getElementById('project-team').value,
-    owner_username: '@'+(user.username||'admin'),
+    owner_username: '@'+(user.username||'user'),
     owner_id: user.id,
-    is_approved: false
+    is_approved: true // Проекты теперь публикуются сразу
   };
   projects.push(newProject);
   saveToLocalStorage();
-  alert('Проект отправлен на модерацию');
+  alert('Проект успешно добавлен!');
   showScreen('main-screen');
   document.getElementById('create-project-form').reset();
 };
 
-
-// ---------- Админ-панель (одобрение проектов) ----------
-function renderAdminPanel() {
-  const pending = projects.filter(p=>!p.is_approved);
-  const wrap = document.getElementById('pending-projects-list');
-  wrap.innerHTML = pending.length
-    ? ''
-    : '<p>Нет проектов на модерации</p>';
-  pending.forEach(project => {
-    const card = document.createElement('div');
-    card.className = 'project-card';
-    card.innerHTML = `
-      <div class="project-title">${project.title}</div>
-      <div><b>Сфера:</b> ${project.sphere}</div>
-      <div><b>Ищем:</b> ${project.roles_needed.join(', ')}</div>
-      <button class="approve-btn" data-id="${project.id}">Одобрить</button>
-    `;
-    wrap.appendChild(card);
-  });
-  document.querySelectorAll('.approve-btn').forEach(btn => {
-    btn.onclick = function() {
-      approveProject(this.dataset.id);
-    };
-  });
-}
-
-function approveProject(id) {
-  const idx = projects.findIndex(p=>p.id == id && !p.is_approved);
-  if (idx > -1) {
-    projects[idx].is_approved = true;
-    saveToLocalStorage();
-    renderAdminPanel();
-  }
-}
+// ---------- Админ-панель (теперь не нужна, можно удалить весь блок) ----------
+// renderAdminPanel и approveProject больше не используются
 
 // --------- Кнопка admin-panel в main-screen ---------
 window.addEventListener('DOMContentLoaded', () => {
